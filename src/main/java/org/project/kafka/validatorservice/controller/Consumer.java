@@ -71,6 +71,7 @@ public class Consumer {
 
         log.info("Final URL : " + redisServiceBaseURL);
         if (isValid(incomingOrder)) {
+            log.info("Email Successfully sent");
             // move the message to next kafka topic
             // and make an insert to redis service
             producerService.sendMessage(incomingOrder.getOrderId(), jsonParser.objectToString(incomingOrder), validatedOrderKafkaTopic);
@@ -101,6 +102,7 @@ public class Consumer {
             // will give an Error code randomly - can be interesting to observe this part
             map.put("error", errorMessages[new Random().nextInt(errorMessages.length)]);
 
+            log.error("Error in sending email : " + map.get("error"));
             HttpEntity<String> entity = new HttpEntity<>(jsonParser.mapToString(map), headers);
 
             ResponseEntity<String> response = restTemplate.exchange(redisServiceBaseURL, HttpMethod.POST, entity, String.class);
