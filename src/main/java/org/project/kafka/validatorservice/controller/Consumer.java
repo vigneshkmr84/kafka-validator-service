@@ -18,12 +18,14 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 @Service
 public class Consumer {
 
     private static final Logger log = LoggerFactory.getLogger(Consumer.class);
     JsonParser jsonParser = new JsonParser();
+
     @Autowired
     Environment environment;
 
@@ -33,13 +35,12 @@ public class Consumer {
     @Autowired
     ApplicationContext context;
 
-    @Autowired
-    KafkaProducerService kafkaProducerService;
+    private final static String[] errorMessages = { "", "Invalid Address Field", "Error in validating Phone number", "Error in connecting to database", "Request Timeout", "Internal Server Error"};
 
     @KafkaListener(topics = "incoming-orders", groupId = "demo-cluster")
     public void consume(@Payload String message
-                        //, @Header(KafkaHeaders.RECEIVED_MESSAGE_KEY) Integer key
-            , @Header(KafkaHeaders.RECEIVED_TIMESTAMP) long receivedTimeStamp) {
+                        , @Header(KafkaHeaders.RECEIVED_TIMESTAMP) long receivedTimeStamp)
+                        throws InterruptedException {
 
         //System.out.println("Received Message Key : " + key);
         System.out.println("Received Message timestamp : " + receivedTimeStamp);
@@ -60,6 +61,13 @@ public class Consumer {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+
+        // for Observability testing (Distributed Tracing
+        if ( incomingOrder.getId() % 13 == 0 ){
+            int sleepTime = getSleepTime();
+            log.info("Sleep Enabled for : " + sleepTime);
+            Thread.sleep(sleepTime);
+        }
 
         log.info("Final URL : " + redisServiceBaseURL);
         if (isValid(incomingOrder)) {
@@ -90,7 +98,9 @@ public class Consumer {
             map.put("status", "error");
             map.put("service", serviceName);
             map.put("id", incomingOrder.getOrderId());
-            map.put("error", "Invalid Address");
+            // will give an Error code randomly - can be interesting to observe this part
+            map.put("error", errorMessages[new Random().nextInt(errorMessages.length)]);
+
             HttpEntity<String> entity = new HttpEntity<>(jsonParser.mapToString(map), headers);
 
             ResponseEntity<String> response = restTemplate.exchange(redisServiceBaseURL, HttpMethod.POST, entity, String.class);
@@ -106,6 +116,12 @@ public class Consumer {
     // if the Order-Id is a multiple of 7
     public boolean isValid(Order order) {
         return !(order.getId() % 7 == 0);
+    }
+
+    public int getSleepTime() {
+        int min=1000;
+        int max = 1900;
+        return (int) ((Math.random() * (max - min)) + min);
     }
 
 }
